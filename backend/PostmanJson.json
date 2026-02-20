@@ -1,0 +1,45 @@
+{
+  "info": {
+    "name": "NPL System - Analyze",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Requests for FastAPI /analyze to process text or uploaded files and optionally answer a question."
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://127.0.0.1:5000" }
+  ],
+  "item": [
+    {
+      "name": "Analyze (JSON)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/analyze"
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"text\": \"Natural Language Processing (NLP) helps computers understand human language. This demo extracts tokens, POS, entities, and more.\",\n  \"question\": \"What does NLP help computers do?\",\n  \"features\": {\n    \"tokens\": true,\n    \"pos\": true,\n    \"entities\": true,\n    \"lemmas\": true,\n    \"dependencies\": true\n  }\n}"
+        }
+      }
+    },
+    {
+      "name": "Analyze (File Upload)",
+      "request": {
+        "method": "POST",
+        "url": {
+          "raw": "{{baseUrl}}/analyze"
+        },
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            { "key": "file", "type": "file", "src": "" },
+            { "key": "question", "type": "text", "value": "What is the main idea?" },
+            { "key": "features", "type": "text", "value": "{\"tokens\":true,\"pos\":true,\"entities\":true,\"lemmas\":true,\"dependencies\":true,\"answer\":true}" }
+          ]
+        }
+      }
+    }
+  ]
+}
