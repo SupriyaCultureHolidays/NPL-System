@@ -3,7 +3,7 @@ from pydantic import BaseModel
 import spacy
 import pdfplumber
 import json
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List, Tuple
 
 nlp = spacy.load("en_core_web_sm")
 
@@ -19,20 +19,55 @@ def _extract_text_from_upload(file: UploadFile) -> str:
             return "".join([p.extract_text() or "" for p in pdf.pages])
     return file.file.read().decode("utf-8", errors="ignore")
 
-def _answer_from_text(text: str, question: str) -> Dict[str, Any]:
-    d = nlp(text)
+def _collect_entities(doc) -> Dict[str, List[str]]:
+    by_label: Dict[str, List[str]] = {}
+    for ent in doc.ents:
+        by_label.setdefault(ent.label_, []).append(ent.text)
+    return by_label
+
+def _wh_answer(doc, question: str) -> Optional[Tuple[str, float]]:
+    ql = question.lower()
+    ents = _collect_entities(doc)
+    if "who" in ql:
+        c = ents.get("PERSON", [])
+        if c:
+            return (max(set(c), key=c.count), 0.9)
+    if "where" in ql:
+        c = (ents.get("GPE", []) + ents.get("LOC", []) + ents.get("FAC", []))
+        if c:
+            return (max(set(c), key=c.count), 0.85)
+    if "when" in ql:
+        c = (ents.get("DATE", []) + ents.get("TIME", []))
+        if c:
+            return (max(set(c), key=c.count), 0.85)
+    return None
+
+def _overlap_answer(doc, question: str) -> Tuple[str, float, List[Tuple[str, float]]]:
     q = nlp(question)
     qset = {t.lemma_.lower() for t in q if not t.is_stop and not t.is_punct}
-    best_score = 0.0
-    best_sent = ""
-    for s in d.sents:
+    scores: List[Tuple[str, float]] = []
+    for s in doc.sents:
         sset = {t.lemma_.lower() for t in s if not t.is_stop and not t.is_punct}
         overlap = len(qset & sset)
-        score = overlap / (len(qset) or 1)
-        if score > best_score:
-            best_score = score
-            best_sent = s.text
-    return {"answer": best_sent.strip(), "confidence": round(best_score, 3)}
+        denom = len(qset) or 1
+        score = overlap / denom
+        scores.append((s.text, score))
+    scores.sort(key=lambda x: x[1], reverse=True)
+    best_sent, best_score = (scores[0] if scores else ("", 0.0))
+    return best_sent.strip(), round(best_score, 3), scores[:3]
+
+def _answer_from_text(text: str, question: str) -> Dict[str, Any]:
+    d = nlp(text)
+    if len([t for t in d if not t.is_space]) < 3:
+        return {"answer": "", "confidence": 0.0, "evidence": []}
+    wh = _wh_answer(d, question)
+    if wh:
+        ans, conf = wh
+        return {"answer": ans, "confidence": conf, "evidence": []}
+    ans, conf, evid = _overlap_answer(d, question)
+    if conf < 0.2 or ans.strip().lower() == question.strip().lower():
+        return {"answer": "", "confidence": conf, "evidence": evid}
+    return {"answer": ans, "confidence": conf, "evidence": evid}
 
 @app.post("/analyze")
 async def analyze(
@@ -70,6 +105,7 @@ async def analyze(
         qa = _answer_from_text(text, question)
         result["answer"] = qa["answer"]
         result["confidence"] = qa["confidence"]
+        result["evidence"] = [{"text": s, "score": sc} for s, sc in qa.get("evidence", [])]
 
     if features:
         try:
@@ -84,6 +120,8 @@ async def analyze(
             if question:
                 filtered["answer"] = result.get("answer")
                 filtered["confidence"] = result.get("confidence")
+                if feats.get("evidence"):
+                    filtered["evidence"] = result.get("evidence")
             return filtered
 
     return result
