@@ -635,10 +635,10 @@ export default function ChatUi() {
         form.append('file', file);
         if (text) form.append('question', text);
         form.append('features', JSON.stringify(features));
-        res = await fetch('http://localhost:3000/api/analyze', { method: 'POST', body: form });
+        res = await fetch('http://localhost:4000/api/analyze', { method: 'POST', body: form });
       } else {
         const payload = { text, question: text, features };
-        res = await fetch('http://localhost:3000/api/analyze', {
+        res = await fetch('http://localhost:4000/api/analyze', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
