@@ -628,16 +628,18 @@ export default function ChatUi() {
     setLoading(true);
 
     try {
-      const features = { tokens: true, pos: true, entities: true, lemmas: true, dependencies: true, answer: true };
+      const features = { answer: true, confidence: true };
       let res;
       if (file) {
+        // File upload - send file with optional question
         const form = new FormData();
         form.append('file', file);
         if (text) form.append('question', text);
         form.append('features', JSON.stringify(features));
         res = await fetch('http://localhost:3000/api/analyze', { method: 'POST', body: form });
       } else {
-        const payload = { text, question: text, features };
+        // No file - send question directly (text should be empty)
+        const payload = { text: '', question: text, features };
         res = await fetch('http://localhost:3000/api/analyze', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -652,6 +654,7 @@ export default function ChatUi() {
       const parsed = renderAssistantMessage(data);
       setMessages(m => [...m, { role: 'assistant', parsed, raw: data }]);
     } catch (e) {
+      console.error('Error:', e);
       setMessages(m => [...m, { role: 'assistant', parsed: { type: 'error', message: e.message }, raw: null }]);
     } finally {
       setLoading(false);
@@ -826,7 +829,7 @@ export default function ChatUi() {
               ref={fileInputRef}
               className="file-input-hidden"
               type="file"
-              accept=".pdf,.txt"
+              accept=".pdf,.docx,.txt"
               onChange={e => setFile(e.target.files[0] || null)}
             />
           </div>
